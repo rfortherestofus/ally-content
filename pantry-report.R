@@ -3,8 +3,8 @@ library(readxl)
 
 # Import ------------------------------------------------------------------
 
-visits <- read_excel("data/pantry-visits-2025.xlsx", skip = 3)
-population <- read_csv("data/county-population.csv")
+visits <- read_excel("data-raw/pantry-visits-2025.xlsx", skip = 3)
+population <- read_csv("data-raw/county-population.csv")
 
 # Clean -------------------------------------------------------------------
 
