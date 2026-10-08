@@ -18,8 +18,11 @@ visits_clean <- visits |>
     # Counts under 10 are suppressed in the source and shown as "<10"
     suppressed = households == "<10",
     households = as.numeric(households),
-    month = ym(month)
+    # October to December use "2025-10" for some counties and "Oct 2025" for others
+    month = coalesce(ym(month, quiet = TRUE), my(month, quiet = TRUE))
   )
+
+stopifnot(!anyNA(visits_clean$month))
 
 visits_with_population <- visits_clean |>
   left_join(population, by = "county", relationship = "many-to-one")
@@ -31,8 +34,34 @@ stopifnot(
 
 # Statewide total ---------------------------------------------------------
 
-visits_with_population |>
-  summarize(total_households = sum(households, na.rm = TRUE))
+statewide_total <- sum(visits_with_population$households, na.rm = TRUE)
+
+# Chart theme -------------------------------------------------------------
+
+chart_blue <- "#2a78d6"
+ink <- "#0b0b0b"
+ink_secondary <- "#52514e"
+
+theme_report <- function() {
+  theme_minimal(base_family = "Inter", base_size = 11) +
+    theme(
+      plot.title.position = "plot",
+      plot.caption.position = "plot",
+      plot.title = element_text(face = "bold", size = 13, color = ink),
+      plot.subtitle = element_text(color = ink_secondary, margin = margin(b = 12)),
+      plot.caption = element_text(
+        hjust = 0,
+        color = ink_secondary,
+        size = 8,
+        lineheight = 1.2,
+        margin = margin(t = 12)
+      ),
+      axis.text = element_text(color = ink, size = 10),
+      panel.grid = element_blank(),
+      plot.background = element_rect(fill = "white", color = NA),
+      plot.margin = margin(16, 16, 16, 16)
+    )
+}
 
 # Households per 1,000 residents ------------------------------------------
 
@@ -51,14 +80,14 @@ per_1000_chart <- ggplot(
   county_rates,
   aes(x = per_1000, y = fct_reorder(county_label, per_1000))
 ) +
-  geom_col(fill = "#2a78d6", width = 0.62) +
+  geom_col(fill = chart_blue, width = 0.62) +
   geom_text(
     aes(label = round(per_1000)),
     hjust = 0,
     nudge_x = 2,
     family = "Inter",
     size = 3.6,
-    color = "#0b0b0b"
+    color = ink
   ) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.08))) +
   labs(
@@ -72,25 +101,8 @@ per_1000_chart <- ggplot(
     x = NULL,
     y = NULL
   ) +
-  theme_minimal(base_family = "Inter", base_size = 11) +
-  theme(
-    plot.title.position = "plot",
-    plot.caption.position = "plot",
-    plot.title = element_text(face = "bold", size = 13, color = "#0b0b0b"),
-    plot.subtitle = element_text(color = "#52514e", margin = margin(b = 12)),
-    plot.caption = element_text(
-      hjust = 0,
-      color = "#52514e",
-      size = 8,
-      lineheight = 1.2,
-      margin = margin(t = 12)
-    ),
-    axis.text.x = element_blank(),
-    axis.text.y = element_text(color = "#0b0b0b", size = 10),
-    panel.grid = element_blank(),
-    plot.background = element_rect(fill = "white", color = NA),
-    plot.margin = margin(16, 16, 16, 16)
-  )
+  theme_report() +
+  theme(axis.text.x = element_blank())
 
 per_1000_chart
 
@@ -113,13 +125,60 @@ ggsave(
 
 # Monthly trend -----------------------------------------------------------
 
-visits_with_population |>
-  group_by(month) |>
-  summarize(households = sum(households, na.rm = TRUE)) |>
-  ggplot(aes(x = month, y = households)) +
-  geom_line() +
+monthly_totals <- visits_with_population |>
+  summarize(households = sum(households, na.rm = TRUE), .by = month) |>
+  arrange(month)
+
+monthly_chart <- ggplot(monthly_totals, aes(x = month, y = households)) +
+  geom_line(color = chart_blue, linewidth = 0.9, lineend = "round") +
+  geom_point(
+    data = slice_tail(monthly_totals, n = 1),
+    color = chart_blue,
+    size = 3
+  ) +
+  geom_text(
+    data = slice_tail(monthly_totals, n = 1),
+    aes(label = scales::comma(households)),
+    hjust = 0,
+    nudge_x = 8,
+    family = "Inter",
+    size = 3.6,
+    color = ink
+  ) +
+  scale_x_date(
+    breaks = monthly_totals$month,
+    date_labels = "%b",
+    expand = expansion(mult = c(0.02, 0.1))
+  ) +
+  scale_y_continuous(
+    labels = scales::comma,
+    limits = c(0, NA),
+    expand = expansion(mult = c(0, 0.08))
+  ) +
   labs(
-    title = "Households served each month, 2025",
+    title = "Pantry visits climbed through the fall, reaching a 2025 high in December",
+    subtitle = "Household visits to partner pantries each month, all partner counties",
+    caption = "Source: Partner pantry visit data, exported January 15, 2026.",
     x = NULL,
     y = NULL
-  )
+  ) +
+  theme_report() +
+  theme(panel.grid.major.y = element_line(color = "#e8e7e3", linewidth = 0.3))
+
+monthly_chart
+
+ggsave(
+  "outputs/monthly-visits.png",
+  monthly_chart,
+  width = 7,
+  height = 4.5,
+  dpi = 300,
+  device = ragg::agg_png
+)
+ggsave(
+  "outputs/monthly-visits.pdf",
+  monthly_chart,
+  width = 7,
+  height = 4.5,
+  device = cairo_pdf
+)

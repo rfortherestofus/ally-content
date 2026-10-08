@@ -1,0 +1,92 @@
+---
+title: "Partner Pantry Visits in 2025"
+subtitle: "Report to the Board"
+date: 2026-10-08
+date-format: "MMMM D, YYYY"
+format:
+  html:
+    embed-resources: true
+    toc: false
+    mainfont: Inter
+    fig-align: left
+  typst:
+    mainfont: Inter
+    fontsize: 10.5pt
+    margin:
+      x: 1in
+      y: 0.9in
+execute:
+  echo: false
+  warning: false
+  message: false
+knitr:
+  opts_chunk:
+    dev: ragg_png
+    dpi: 300
+    fig.width: 7
+    fig.height: 4.5
+---
+
+```{r}
+#| include: false
+source("pantry-report.R")
+
+comma <- scales::comma
+
+q3_total <- monthly_totals |>
+  filter(quarter(month) == 3) |>
+  pull(households) |>
+  sum()
+
+q4_total <- monthly_totals |>
+  filter(quarter(month) == 4) |>
+  pull(households) |>
+  sum()
+
+q4_change <- scales::percent(q4_total / q3_total - 1, accuracy = 1)
+
+september <- monthly_totals |> filter(month(month) == 9) |> pull(households)
+december <- monthly_totals |> filter(month(month) == 12) |> pull(households)
+december_change <- scales::percent(december / september - 1, accuracy = 1)
+
+n_counties <- n_distinct(county_rates$county)
+
+top_county <- county_rates |> slice_max(per_1000, n = 1)
+bottom_county <- county_rates |> slice_min(per_1000, n = 1)
+
+lane_total <- county_rates |> filter(county == "Lane") |> pull(households)
+suppressed_months <- sum(county_rates$suppressed_months)
+```
+
+## Summary
+
+- Partner pantries recorded **`r comma(statewide_total)` household visits** across `r n_counties` partner counties in 2025.
+- Demand **rose through the fall**. Visits from October to December were `r q4_change` higher than from July to September, and December was the busiest month of the year, with `r comma(december)` visits.
+- Relative to population, **`r top_county$county` County** had the most visits, at `r round(top_county$per_1000)` per 1,000 residents. `r bottom_county$county` County had the fewest, at `r round(bottom_county$per_1000)`.
+
+## Visits rose through the fall
+
+Monthly visits dipped slightly through the spring, reaching a low in April, then rose every month for the rest of the year. December's `r comma(december)` visits were `r december_change` above September's `r comma(september)`. The increase showed up in every partner county, not just one or two.
+
+```{r}
+#| fig-alt: "Line chart of monthly household visits to partner pantries in 2025. Visits were between about 24,600 and 27,000 a month from January to September, then rose each month to a high of 30,814 in December."
+monthly_chart
+```
+
+## Visits per resident varied widely by county
+
+Four counties (Multnomah, Marion, Jackson, and Lane) had between 115 and 128 visits per 1,000 residents. The other four had between 76 and 87. Comparing per resident, rather than by raw totals, keeps the largest counties from dominating the picture.
+
+```{r}
+#| fig-alt: "Bar chart of household visits per 1,000 residents in 2025 by county: Multnomah 128, Marion 124, Jackson 121, Lane 115, Deschutes 87, Clackamas 84, Wheeler 81 (a minimum), Washington 76."
+per_1000_chart
+```
+
+## About these numbers
+
+- **Visits, not unique households.** Pantries report how many households they serve each month. A household that visits in several months is counted once in each month, so these figures count visits rather than distinct households.
+- **Partner counties only.** The figures cover the `r n_counties` counties with partner pantries, not the whole state.
+- **Small counts are suppressed.** Months with fewer than 10 households are withheld in the source data. This affects `r suppressed_months` months in Wheeler County, so its figures are a minimum.
+- **Correction to an earlier draft.** An earlier version of this analysis reported `r comma(statewide_total + lane_total)` visits. It counted Lane County's `r comma(lane_total)` visits twice because of a duplicate entry in the population file. The corrected total is `r comma(statewide_total)`.
+
+Source: Partner pantry visit data, exported January 15, 2026. County populations are rounded estimates.
