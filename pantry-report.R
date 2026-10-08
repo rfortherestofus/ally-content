@@ -4,7 +4,9 @@ library(readxl)
 # Import ------------------------------------------------------------------
 
 visits <- read_excel("data-raw/pantry-visits-2025.xlsx", skip = 3)
-population <- read_csv("data-raw/county-population.csv")
+population <- read_csv("data-raw/county-population.csv") |>
+  # The source file lists Lane twice; a duplicate would double that county's visits
+  distinct()
 
 # Clean -------------------------------------------------------------------
 
@@ -16,7 +18,9 @@ visits_clean <- visits |>
   )
 
 visits_with_population <- visits_clean |>
-  left_join(population, by = "county", relationship = "many-to-many")
+  left_join(population, by = "county", relationship = "many-to-one")
+
+stopifnot(nrow(visits_with_population) == nrow(visits_clean))
 
 # Statewide total ---------------------------------------------------------
 
